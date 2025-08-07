@@ -1,0 +1,4 @@
+2025-08-08 01:58:23,917 - domain_scanner.info_gatherer - INFO - Gathering information for domain: example.com
+2025-08-08 01:58:29,536 - domain_scanner.subdomain_enum - INFO - Starting subdomain enumeration for example.com
+2025-08-08 01:58:29,537 - domain_scanner.subdomain_enum - INFO - Loaded 479 subdomain candidates from wordlist
+2025-08-08 01:58:29,537 - domain_scanner.subdomain_enum - INFO - Performing passive subdomain enumeration
