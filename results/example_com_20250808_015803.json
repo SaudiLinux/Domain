@@ -1,0 +1,80 @@
+{
+    "domain_info": {
+        "domain": "example.com",
+        "timestamp": "2025-08-08 01:58:03",
+        "ip_addresses": [
+            "96.7.128.175",
+            "96.7.128.198",
+            "23.192.228.80",
+            "23.192.228.84",
+            "23.215.0.136",
+            "23.215.0.138"
+        ],
+        "whois": {
+            "registrar": "RESERVED-Internet Assigned Numbers Authority",
+            "creation_date": "1995-08-14",
+            "expiration_date": "2025-08-13",
+            "updated_date": "2024-08-14",
+            "name_servers": [
+                "A.IANA-SERVERS.NET",
+                "B.IANA-SERVERS.NET"
+            ],
+            "status": [
+                "clientDeleteProhibited https://icann.org/epp#clientDeleteProhibited",
+                "clientTransferProhibited https://icann.org/epp#clientTransferProhibited",
+                "clientUpdateProhibited https://icann.org/epp#clientUpdateProhibited"
+            ],
+            "emails": [],
+            "dnssec": "signedDelegation"
+        },
+        "dns_records": {
+            "A": [
+                "23.192.228.84",
+                "23.215.0.136",
+                "23.215.0.138",
+                "96.7.128.175",
+                "23.192.228.80",
+                "96.7.128.198"
+            ],
+            "AAAA": [
+                "2600:1406:3a00:21::173e:2e65",
+                "2600:1406:bc00:53::b81e:94c8",
+                "2600:1408:ec00:36::1736:7f31",
+                "2600:1406:bc00:53::b81e:94ce",
+                "2600:1408:ec00:36::1736:7f24",
+                "2600:1406:3a00:21::173e:2e66"
+            ],
+            "MX": [
+                "0 ."
+            ],
+            "NS": [
+                "a.iana-servers.net.",
+                "b.iana-servers.net."
+            ],
+            "TXT": [
+                "\"v=spf1 -all\"",
+                "\"_k2n1y4vw3qtb4skdx9e7dxt97qrmmq9\""
+            ],
+            "SOA": [
+                "ns.icann.org. noc.dns.icann.org. 2025011738 7200 3600 1209600 3600"
+            ],
+            "CNAME": []
+        },
+        "http_headers": {
+            "Accept-Ranges": "bytes",
+            "Content-Type": "text/html",
+            "ETag": "\"84238dfc8092e5d9c0dac8ef93371a07:1736799080.121134\"",
+            "Last-Modified": "Mon, 13 Jan 2025 20:11:20 GMT",
+            "Vary": "Accept-Encoding",
+            "Content-Encoding": "gzip",
+            "Content-Length": "648",
+            "Cache-Control": "max-age=2870",
+            "Date": "Thu, 07 Aug 2025 22:58:04 GMT",
+            "Connection": "keep-alive"
+        },
+        "technologies": [],
+        "ssl_info": {
+            "error": "No SSL certificate found or connection error"
+        }
+    }
+}
