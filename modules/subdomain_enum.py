@@ -7,12 +7,13 @@ import logging
 import time
 import threading
 import queue
+import random
 from concurrent.futures import ThreadPoolExecutor
 from rich.console import Console
 from rich.progress import Progress
 from rich.table import Table
 
-from .utils import load_wordlist, get_user_agent
+from .utils import load_wordlist, get_random_user_agent
 
 # Initialize console
 console = Console()
@@ -20,7 +21,7 @@ console = Console()
 class SubdomainEnumerator:
     """Class for enumerating subdomains of a target domain"""
     
-    def __init__(self, domain, threads=10, timeout=30, wordlist=None, delay=0.0):
+    def __init__(self, domain, threads=10, timeout=30, wordlist=None, delay='0', proxy=None):
         """Initialize the SubdomainEnumerator class
         
         Args:
@@ -28,17 +29,36 @@ class SubdomainEnumerator:
             threads (int): Number of threads to use
             timeout (int): Request timeout in seconds
             wordlist (str): Path to custom wordlist file
-            delay (float): Delay between requests in seconds
+            delay (str): Delay between requests (fixed or range)
+            proxy (str): Proxy URL
         """
         self.domain = domain
         self.threads = threads
         self.timeout = timeout
         self.wordlist_path = wordlist
-        self.delay = delay
-        self.user_agent = get_user_agent()
+        self.delay_str = delay
+        self.proxy = proxy
         self.logger = logging.getLogger('domain_scanner.subdomain_enum')
         self.found_subdomains = set()
         self.resolvers = self._get_resolvers()
+
+    def _get_delay(self):
+        """Get a random delay from the specified range."""
+        if '-' in self.delay_str:
+            min_delay, max_delay = map(float, self.delay_str.split('-'))
+            return random.uniform(min_delay, max_delay)
+        else:
+            return float(self.delay_str)
+
+    def _make_request(self, url):
+        """Make an HTTP request with WAF evasion techniques."""
+        headers = {'User-Agent': get_random_user_agent()}
+        proxies = {'http': self.proxy, 'https': self.proxy} if self.proxy else None
+        
+        # Apply delay
+        time.sleep(self._get_delay())
+        
+        return requests.get(url, headers=headers, timeout=self.timeout, proxies=proxies, verify=False)
     
     def enumerate(self):
         """Enumerate subdomains using multiple techniques
@@ -111,7 +131,7 @@ class SubdomainEnumerator:
         try:
             self.logger.debug("Enumerating subdomains from crt.sh")
             url = f"https://crt.sh/?q=%.{self.domain}&output=json"
-            response = requests.get(url, timeout=self.timeout)
+            response = self._make_request(url)
             
             if response.status_code == 200:
                 try:
@@ -132,8 +152,7 @@ class SubdomainEnumerator:
         try:
             self.logger.debug("Enumerating subdomains from VirusTotal")
             url = f"https://www.virustotal.com/ui/domains/{self.domain}/subdomains?limit=40"
-            headers = {'User-Agent': self.user_agent}
-            response = requests.get(url, headers=headers, timeout=self.timeout)
+            response = self._make_request(url)
             
             if response.status_code == 200:
                 try:
@@ -152,8 +171,7 @@ class SubdomainEnumerator:
         try:
             self.logger.debug("Enumerating subdomains from AlienVault OTX")
             url = f"https://otx.alienvault.com/api/v1/indicators/domain/{self.domain}/passive_dns"
-            headers = {'User-Agent': self.user_agent}
-            response = requests.get(url, headers=headers, timeout=self.timeout)
+            response = self._make_request(url)
             
             if response.status_code == 200:
                 try:
@@ -172,8 +190,7 @@ class SubdomainEnumerator:
         try:
             self.logger.debug("Enumerating subdomains from ThreatCrowd")
             url = f"https://www.threatcrowd.org/searchApi/v2/domain/report/?domain={self.domain}"
-            headers = {'User-Agent': self.user_agent}
-            response = requests.get(url, headers=headers, timeout=self.timeout)
+            response = self._make_request(url)
             
             if response.status_code == 200:
                 try:
@@ -192,8 +209,7 @@ class SubdomainEnumerator:
         try:
             self.logger.debug("Enumerating subdomains from HackerTarget")
             url = f"https://api.hackertarget.com/hostsearch/?q={self.domain}"
-            headers = {'User-Agent': self.user_agent}
-            response = requests.get(url, headers=headers, timeout=self.timeout)
+            response = self._make_request(url)
             
             if response.status_code == 200 and not response.text.startswith('error'):
                 for line in response.text.splitlines():

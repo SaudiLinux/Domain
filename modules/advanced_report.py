@@ -1,0 +1,432 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+Advanced Report Generator for Domain Scanner
+Generates multiple report formats with detailed analysis
+"""
+
+import json
+import html
+import xml.etree.ElementTree as ET
+from datetime import datetime
+from pathlib import Path
+from rich.console import Console
+from rich.table import Table
+from rich.panel import Panel
+
+console = Console()
+
+class AdvancedReportGenerator:
+    """Advanced report generator with multiple formats"""
+    
+    def __init__(self, domain, output_dir="reports"):
+        self.domain = domain
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(exist_ok=True)
+        self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+    def generate_json_report(self, results, filename=None):
+        """Generate detailed JSON report"""
+        if not filename:
+            filename = self.output_dir / f"{self.domain}_{self.timestamp}.json"
+        
+        # Enhance results with analysis
+        enhanced_results = self._analyze_results(results)
+        
+        with open(filename, 'w', encoding='utf-8') as f:
+            json.dump(enhanced_results, f, indent=2, ensure_ascii=False, default=str)
+        
+        console.print(f"[green]✓[/green] JSON report saved: {filename}")
+        return filename
+    
+    def generate_html_report(self, results, filename=None):
+        """Generate interactive HTML report"""
+        if not filename:
+            filename = self.output_dir / f"{self.domain}_{self.timestamp}.html"
+        
+        # Analyze results
+        analysis = self._analyze_results(results)
+        
+        # Create HTML content
+        html_content = self._create_html_report(results, analysis)
+        
+        with open(filename, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+        
+        console.print(f"[green]✓[/green] HTML report saved: {filename}")
+        return filename
+    
+    def generate_xml_report(self, results, filename=None):
+        """Generate XML report"""
+        if not filename:
+            filename = self.output_dir / f"{self.domain}_{self.timestamp}.xml"
+        
+        root = ET.Element("domain_scan_report")
+        root.set("domain", self.domain)
+        root.set("timestamp", datetime.now().isoformat())
+        
+        # Add scan info
+        scan_info = ET.SubElement(root, "scan_info")
+        if 'scan_info' in results:
+            for key, value in results['scan_info'].items():
+                ET.SubElement(scan_info, key).text = str(value)
+        
+        # Add results
+        results_elem = ET.SubElement(root, "results")
+        for module, data in results.get('results', {}).items():
+            module_elem = ET.SubElement(results_elem, "module", name=module)
+            self._dict_to_xml(data, module_elem)
+        
+        # Add analysis
+        analysis = self._analyze_results(results)
+        analysis_elem = ET.SubElement(root, "analysis")
+        self._dict_to_xml(analysis, analysis_elem)
+        
+        # Write XML
+        tree = ET.ElementTree(root)
+        tree.write(filename, encoding='utf-8', xml_declaration=True)
+        
+        console.print(f"[green]✓[/green] XML report saved: {filename}")
+        return filename
+    
+    def generate_markdown_report(self, results, filename=None):
+        """Generate Markdown report"""
+        if not filename:
+            filename = self.output_dir / f"{self.domain}_{self.timestamp}.md"
+        
+        analysis = self._analyze_results(results)
+        
+        markdown_content = f"""# Domain Security Scan Report
+
+**Domain:** {self.domain}  
+**Scan Date:** {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}  
+**Duration:** {results.get('scan_info', {}).get('duration_seconds', 'N/A')} seconds
+
+## Executive Summary
+
+{self._generate_executive_summary(analysis)}
+
+## Detailed Results
+
+### Domain Information
+{self._format_dict_markdown(results.get('results', {}).get('domain_info', {}))}
+
+### Subdomains Found
+{self._format_list_markdown(results.get('results', {}).get('subdomains', []))}
+
+### URLs Discovered
+{self._format_list_markdown(results.get('results', {}).get('urls', []))}
+
+### Admin Pages
+{self._format_list_markdown(results.get('results', {}).get('admin_pages', []))}
+
+### Attack Surface
+{self._format_dict_markdown(results.get('results', {}).get('attack_surface', {}))}
+
+### Vulnerabilities
+{self._format_dict_markdown(results.get('results', {}).get('vulnerabilities', {}))}
+
+## Risk Assessment
+
+{self._generate_risk_assessment(analysis)}
+
+## Recommendations
+
+{self._generate_recommendations(analysis)}
+
+## Technical Details
+
+- **Total Requests:** {results.get('scan_info', {}).get('statistics', {}).get('total_requests', 'N/A')}
+- **Success Rate:** {results.get('scan_info', {}).get('statistics', {}).get('success_rate', 'N/A'):.1f}%
+- **Modules Executed:** {', '.join(results.get('scan_info', {}).get('modules', []))}
+
+---
+*Generated by Domain Scanner*
+"""
+        
+        with open(filename, 'w', encoding='utf-8') as f:
+            f.write(markdown_content)
+        
+        console.print(f"[green]✓[/green] Markdown report saved: {filename}")
+        return filename
+    
+    def _analyze_results(self, results):
+        """Analyze scan results and provide insights"""
+        analysis = {
+            'security_score': 0,
+            'risk_level': 'Unknown',
+            'findings_count': {},
+            'critical_findings': [],
+            'warnings': [],
+            'recommendations': []
+        }
+        
+        # Count findings
+        for module, data in results.get('results', {}).items():
+            if isinstance(data, list):
+                analysis['findings_count'][module] = len(data)
+            elif isinstance(data, dict):
+                analysis['findings_count'][module] = len(data)
+            else:
+                analysis['findings_count'][module] = 0
+        
+        # Calculate security score
+        total_subdomains = analysis['findings_count'].get('subdomains', 0)
+        total_urls = analysis['findings_count'].get('urls', 0)
+        total_vulns = analysis['findings_count'].get('vulnerabilities', 0)
+        
+        # Simple scoring algorithm (can be enhanced)
+        score = 100
+        
+        # Deduct points for findings
+        if total_subdomains > 50:
+            score -= 20
+            analysis['warnings'].append("Large attack surface: Many subdomains discovered")
+        
+        if total_urls > 100:
+            score -= 15
+            analysis['warnings'].append("Many URLs discovered - potential information disclosure")
+        
+        if total_vulns > 0:
+            score -= 30
+            analysis['critical_findings'].append(f"{total_vulns} vulnerabilities found")
+        
+        # Ensure score is within bounds
+        analysis['security_score'] = max(0, min(100, score))
+        
+        # Determine risk level
+        if analysis['security_score'] >= 80:
+            analysis['risk_level'] = 'Low'
+        elif analysis['security_score'] >= 60:
+            analysis['risk_level'] = 'Medium'
+        elif analysis['security_score'] >= 40:
+            analysis['risk_level'] = 'High'
+        else:
+            analysis['risk_level'] = 'Critical'
+        
+        # Generate recommendations
+        if total_subdomains > 30:
+            analysis['recommendations'].append("Consider reducing subdomain exposure")
+        
+        if total_vulns > 0:
+            analysis['recommendations'].append("Address identified vulnerabilities immediately")
+        
+        analysis['recommendations'].append("Regular security assessments recommended")
+        
+        return analysis
+    
+    def _create_html_report(self, results, analysis):
+        """Create HTML report content"""
+        html_template = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Domain Security Report - {domain}</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }}
+        .container {{ max-width: 1200px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 0 20px rgba(0,0,0,0.1); }}
+        .header {{ text-align: center; margin-bottom: 30px; }}
+        .header h1 {{ color: #333; margin-bottom: 10px; }}
+        .header .timestamp {{ color: #666; font-size: 14px; }}
+        .summary {{ background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 30px; }}
+        .section {{ margin-bottom: 30px; }}
+        .section h2 {{ color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }}
+        .stats-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0; }}
+        .stat-card {{ background: #fff; padding: 20px; border-radius: 8px; border-left: 4px solid #3498db; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }}
+        .stat-number {{ font-size: 24px; font-weight: bold; color: #3498db; }}
+        .stat-label {{ color: #666; font-size: 14px; }}
+        .risk-critical {{ color: #e74c3c; }}
+        .risk-high {{ color: #f39c12; }}
+        .risk-medium {{ color: #f1c40f; }}
+        .risk-low {{ color: #27ae60; }}
+        .footer {{ text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Domain Security Report</h1>
+            <div class="timestamp">{timestamp}</div>
+            <h2>{domain}</h2>
+        </div>
+        
+        <div class="summary">
+            <h3>Executive Summary</h3>
+            <p><strong>Security Score:</strong> <span class="stat-number">{security_score}</span>/100</p>
+            <p><strong>Risk Level:</strong> <span class="risk-{risk_level}">{risk_level}</span></p>
+            <p><strong>Total Findings:</strong> {total_findings}</p>
+        </div>
+        
+        <div class="section">
+            <h2>Statistics</h2>
+            <div class="stats-grid">
+                {stats_grid}
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>Recommendations</h2>
+            <ul>
+            {recommendations}
+            </ul>
+        </div>
+        
+        <div class="footer">
+            <p>Generated by Domain Scanner</p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+        
+        # Prepare data for template
+        stats_grid = ""
+        for module, count in analysis['findings_count'].items():
+            stats_grid += f"""
+                <div class="stat-card">
+                    <div class="stat-number">{count}</div>
+                    <div class="stat-label">{module.replace('_', ' ').title()}</div>
+                </div>
+            """
+        
+        recommendations = ""
+        for rec in analysis['recommendations']:
+            recommendations += f"<li>{rec}</li>"
+        
+        total_findings = sum(analysis['findings_count'].values())
+        
+        return html_template.format(
+            domain=self.domain,
+            timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            security_score=analysis['security_score'],
+            risk_level=analysis['risk_level'].lower(),
+            total_findings=total_findings,
+            stats_grid=stats_grid,
+            recommendations=recommendations
+        )
+    
+    def _dict_to_xml(self, data, parent):
+        """Convert dictionary to XML elements"""
+        if isinstance(data, dict):
+            for key, value in data.items():
+                child = ET.SubElement(parent, str(key))
+                self._dict_to_xml(value, child)
+        elif isinstance(data, list):
+            for item in data:
+                child = ET.SubElement(parent, 'item')
+                self._dict_to_xml(item, child)
+        else:
+            parent.text = str(data)
+    
+    def _format_dict_markdown(self, data):
+        """Format dictionary as markdown"""
+        if not data:
+            return "No data available"
+        
+        lines = []
+        for key, value in data.items():
+            if isinstance(value, list):
+                lines.append(f"- **{key}:** {len(value)} items")
+            else:
+                lines.append(f"- **{key}:** {value}")
+        
+        return "\n".join(lines) if lines else "No data available"
+    
+    def _format_list_markdown(self, data):
+        """Format list as markdown"""
+        if not data:
+            return "No items found"
+        
+        lines = []
+        for item in data[:10]:  # Show first 10
+            lines.append(f"- {item}")
+        
+        if len(data) > 10:
+            lines.append(f"- ... and {len(data) - 10} more items")
+        
+        return "\n".join(lines) if lines else "No items found"
+    
+    def _generate_executive_summary(self, analysis):
+        """Generate executive summary"""
+        summary = f"""
+The security scan revealed the following key findings:
+
+**Overall Security Score:** {analysis['security_score']}/100 ({analysis['risk_level']} Risk)
+
+**Key Findings:**
+- {analysis['findings_count'].get('subdomains', 0)} subdomains discovered
+- {analysis['findings_count'].get('urls', 0)} URLs identified
+- {analysis['findings_count'].get('vulnerabilities', 0)} potential vulnerabilities found
+
+**Critical Issues:** {len(analysis['critical_findings'])}
+"""
+        
+        if analysis['critical_findings']:
+            for finding in analysis['critical_findings']:
+                summary += f"- {finding}\n"
+        
+        return summary
+    
+    def _generate_risk_assessment(self, analysis):
+        """Generate risk assessment"""
+        return f"""
+Based on the scan results, the domain has been assigned a **{analysis['risk_level']}** risk level.
+
+**Risk Factors:**
+- Large attack surface with {analysis['findings_count'].get('subdomains', 0)} subdomains
+- {len(analysis['warnings'])} security warnings identified
+- {analysis['findings_count'].get('vulnerabilities', 0)} potential vulnerabilities
+
+**Impact Assessment:**
+The identified issues could potentially lead to information disclosure, unauthorized access, or system compromise if not addressed.
+"""
+    
+    def _generate_recommendations(self, analysis):
+        """Generate security recommendations"""
+        recommendations = """
+**Immediate Actions Required:**
+1. Address all critical vulnerabilities identified in the scan
+2. Review and secure exposed subdomains
+3. Implement proper access controls for admin interfaces
+
+**Long-term Recommendations:**
+1. Regular security assessments and penetration testing
+2. Implement security monitoring and alerting
+3. Keep all systems and applications updated
+4. Follow security best practices for web applications
+"""
+        return recommendations
+
+# Example usage
+if __name__ == "__main__":
+    # Sample results for testing
+    sample_results = {
+        'scan_info': {
+            'domain': 'example.com',
+            'start_time': datetime.now(),
+            'duration_seconds': 120.5,
+            'modules': ['domain_info', 'subdomains', 'vulnerabilities']
+        },
+        'results': {
+            'domain_info': {
+                'ip': '93.184.216.34',
+                'whois': 'Sample WHOIS data'
+            },
+            'subdomains': ['www.example.com', 'mail.example.com', 'ftp.example.com'],
+            'vulnerabilities': {
+                'xss': 2,
+                'sql_injection': 0
+            }
+        }
+    }
+    
+    generator = AdvancedReportGenerator('example.com')
+    
+    # Generate all report types
+    generator.generate_json_report(sample_results)
+    generator.generate_html_report(sample_results)
+    generator.generate_xml_report(sample_results)
+    generator.generate_markdown_report(sample_results)

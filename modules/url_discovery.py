@@ -6,6 +6,7 @@ import logging
 import time
 import threading
 import queue
+import random
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup
@@ -13,7 +14,7 @@ from rich.console import Console
 from rich.progress import Progress
 from rich.table import Table
 
-from .utils import load_wordlist, get_user_agent
+from .utils import load_wordlist, get_random_user_agent, get_headless_driver
 
 # Initialize console
 console = Console()
@@ -21,7 +22,7 @@ console = Console()
 class URLDiscovery:
     """Class for discovering hidden URLs in a domain"""
     
-    def __init__(self, domain, threads=10, timeout=30, wordlist=None, delay=0.0):
+    def __init__(self, domain, threads=10, timeout=30, wordlist=None, delay='0', proxy=None, headless=False):
         """Initialize the URLDiscovery class
         
         Args:
@@ -29,18 +30,51 @@ class URLDiscovery:
             threads (int): Number of threads to use
             timeout (int): Request timeout in seconds
             wordlist (str): Path to custom wordlist file
-            delay (float): Delay between requests in seconds
+            delay (str): Delay between requests (fixed or range)
+            proxy (str): Proxy URL
+            headless (bool): Use headless browser for scanning
         """
         self.domain = domain
         self.threads = threads
         self.timeout = timeout
         self.wordlist_path = wordlist
-        self.delay = delay
-        self.user_agent = get_user_agent()
+        self.delay_str = delay
+        self.proxy = proxy
+        self.headless = headless
+        self.driver = None
         self.logger = logging.getLogger('domain_scanner.url_discovery')
         self.found_urls = set()
         self.crawled_urls = set()
         self.extensions = ['.php', '.asp', '.aspx', '.jsp', '.js', '.html', '.htm', '.xml', '.json', '.txt', '.pdf', '.zip', '.tar.gz', '.sql', '.bak', '.old', '.backup']
+
+    def _get_delay(self):
+        """Get a random delay from the specified range."""
+        if '-' in self.delay_str:
+            min_delay, max_delay = map(float, self.delay_str.split('-'))
+            return random.uniform(min_delay, max_delay)
+        else:
+            return float(self.delay_str)
+
+    def _make_request(self, url):
+        """Make an HTTP request with WAF evasion techniques."""
+        if self.headless:
+            if not self.driver:
+                self.driver = get_headless_driver()
+            self.driver.get(url)
+            # Log cookies
+            cookies = self.driver.get_cookies()
+            print(f"Cookies found: {cookies}")
+            self.logger.info(f"Cookies for {url}: {cookies}")
+            return self.driver.page_source, self.driver.current_url
+        else:
+            headers = {'User-Agent': get_random_user_agent()}
+            proxies = {'http': self.proxy, 'https': self.proxy} if self.proxy else None
+            
+            # Apply delay
+            time.sleep(self._get_delay())
+            
+            response = requests.get(url, headers=headers, timeout=self.timeout, proxies=proxies, verify=False)
+            return response.text, response.url
     
     def discover(self):
         """Discover hidden URLs using multiple techniques
@@ -76,21 +110,12 @@ class URLDiscovery:
         """Determine if the site uses HTTP or HTTPS"""
         try:
             # Try HTTPS first
-            response = requests.get(
-                f"https://{self.domain}",
-                headers={'User-Agent': self.user_agent},
-                timeout=self.timeout,
-                verify=False  # Disable SSL verification for scanning purposes
-            )
+            response = self._make_request(f"https://{self.domain}")
             return f"https://{self.domain}"
         except Exception:
             try:
                 # Try HTTP if HTTPS fails
-                response = requests.get(
-                    f"http://{self.domain}",
-                    headers={'User-Agent': self.user_agent},
-                    timeout=self.timeout
-                )
+                response = self._make_request(f"http://{self.domain}")
                 return f"http://{self.domain}"
             except Exception as e:
                 self.logger.error(f"Error connecting to {self.domain}: {str(e)}")
@@ -145,18 +170,16 @@ class URLDiscovery:
     def _fetch_url(self, url):
         """Fetch a URL and return the response"""
         try:
-            response = requests.get(
-                url,
-                headers={'User-Agent': self.user_agent},
-                timeout=self.timeout,
-                verify=False  # Disable SSL verification for scanning purposes
-            )
+            page_source, current_url = self._make_request(url)
             
-            if response.status_code == 200:
-                return response
-            else:
-                self.logger.debug(f"Got status code {response.status_code} for {url}")
-                return None
+            # Return a mock response-like object for compatibility
+            class MockResponse:
+                def __init__(self, text, url):
+                    self.text = text
+                    self.url = url
+                    self.status_code = 200
+            
+            return MockResponse(page_source, current_url)
         except Exception as e:
             self.logger.debug(f"Error fetching {url}: {str(e)}")
             return None

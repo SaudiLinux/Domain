@@ -8,12 +8,13 @@ import requests
 import logging
 import time
 import json
+import random
 from datetime import datetime
 from bs4 import BeautifulSoup
 from rich.console import Console
 from rich.table import Table
 
-from .utils import get_user_agent
+from .utils import get_random_user_agent
 
 # Initialize console
 console = Console()
@@ -21,18 +22,40 @@ console = Console()
 class DomainInfo:
     """Class for gathering basic information about a domain"""
     
-    def __init__(self, domain, timeout=30, user_agent=None):
+    def __init__(self, domain, timeout=30, user_agent=None, delay='0', proxy=None):
         """Initialize the DomainInfo class
         
         Args:
             domain (str): Target domain
             timeout (int): Request timeout in seconds
             user_agent (str): Custom user agent string
+            delay (str): Delay between requests (fixed or range)
+            proxy (str): Proxy URL
         """
         self.domain = domain
         self.timeout = timeout
-        self.user_agent = get_user_agent(user_agent)
+        self.user_agent = user_agent
+        self.delay_str = delay
+        self.proxy = proxy
         self.logger = logging.getLogger('domain_scanner.info_gatherer')
+        
+    def _get_delay(self):
+        """Get a random delay from the specified range."""
+        if '-' in self.delay_str:
+            min_delay, max_delay = map(float, self.delay_str.split('-'))
+            return random.uniform(min_delay, max_delay)
+        else:
+            return float(self.delay_str)
+
+    def _make_request(self, url):
+        """Make an HTTP request with WAF evasion techniques."""
+        headers = {'User-Agent': self.user_agent or get_random_user_agent()}
+        proxies = {'http': self.proxy, 'https': self.proxy} if self.proxy else None
+        
+        # Apply delay
+        time.sleep(self._get_delay())
+        
+        return requests.get(url, headers=headers, timeout=self.timeout, proxies=proxies, verify=False)
         
     def gather_info(self):
         """Gather comprehensive information about the domain
@@ -134,29 +157,18 @@ class DomainInfo:
         
         try:
             self.logger.debug(f"Getting HTTP headers for {self.domain}")
-            response = requests.get(
-                f"http://{self.domain}", 
-                headers={'User-Agent': self.user_agent},
-                timeout=self.timeout,
-                allow_redirects=True
-            )
+            response = self._make_request(f"https://{self.domain}")
             headers = dict(response.headers)
         except Exception as e:
             self.logger.error(f"Error getting HTTP headers: {str(e)}")
         
-        # Try HTTPS if HTTP failed
+        # Try HTTP if HTTPS failed
         if not headers:
             try:
-                response = requests.get(
-                    f"https://{self.domain}", 
-                    headers={'User-Agent': self.user_agent},
-                    timeout=self.timeout,
-                    allow_redirects=True,
-                    verify=False  # Disable SSL verification for scanning purposes
-                )
+                response = self._make_request(f"http://{self.domain}")
                 headers = dict(response.headers)
             except Exception as e:
-                self.logger.error(f"Error getting HTTPS headers: {str(e)}")
+                self.logger.error(f"Error getting HTTP headers: {str(e)}")
         
         return headers
     
@@ -166,20 +178,11 @@ class DomainInfo:
         
         try:
             self.logger.debug(f"Detecting technologies for {self.domain}")
-            response = requests.get(
-                f"https://{self.domain}",
-                headers={'User-Agent': self.user_agent},
-                timeout=self.timeout,
-                verify=False  # Disable SSL verification for scanning purposes
-            )
+            response = self._make_request(f"https://{self.domain}")
             
             # Check status code
             if response.status_code != 200:
-                response = requests.get(
-                    f"http://{self.domain}",
-                    headers={'User-Agent': self.user_agent},
-                    timeout=self.timeout
-                )
+                response = self._make_request(f"http://{self.domain}")
             
             if response.status_code == 200:
                 # Check headers for technology clues

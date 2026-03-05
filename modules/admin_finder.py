@@ -6,12 +6,13 @@ import logging
 import time
 import threading
 import queue
+import random
 from urllib.parse import urljoin
 from rich.console import Console
 from rich.progress import Progress
 from rich.table import Table
 
-from .utils import load_wordlist, get_user_agent
+from .utils import load_wordlist, get_random_user_agent
 
 # Initialize console
 console = Console()
@@ -19,7 +20,7 @@ console = Console()
 class AdminFinder:
     """Class for finding admin pages of a target domain"""
     
-    def __init__(self, domain, threads=10, timeout=30, wordlist=None, delay=0.0):
+    def __init__(self, domain, threads=10, timeout=30, wordlist=None, delay='0', proxy=None):
         """Initialize the AdminFinder class
         
         Args:
@@ -27,16 +28,35 @@ class AdminFinder:
             threads (int): Number of threads to use
             timeout (int): Request timeout in seconds
             wordlist (str): Path to custom wordlist file
-            delay (float): Delay between requests in seconds
+            delay (str): Delay between requests (fixed or range)
+            proxy (str): Proxy URL
         """
         self.domain = domain
         self.threads = threads
         self.timeout = timeout
         self.wordlist_path = wordlist
-        self.delay = delay
-        self.user_agent = get_user_agent()
+        self.delay_str = delay
+        self.proxy = proxy
         self.logger = logging.getLogger('domain_scanner.admin_finder')
         self.found_pages = []
+
+    def _get_delay(self):
+        """Get a random delay from the specified range."""
+        if '-' in self.delay_str:
+            min_delay, max_delay = map(float, self.delay_str.split('-'))
+            return random.uniform(min_delay, max_delay)
+        else:
+            return float(self.delay_str)
+
+    def _make_request(self, url):
+        """Make an HTTP request with WAF evasion techniques."""
+        headers = {'User-Agent': get_random_user_agent()}
+        proxies = {'http': self.proxy, 'https': self.proxy} if self.proxy else None
+        
+        # Apply delay
+        time.sleep(self._get_delay())
+        
+        return requests.get(url, headers=headers, timeout=self.timeout, proxies=proxies, verify=False)
     
     def find(self):
         """Find admin pages using brute force
@@ -74,21 +94,12 @@ class AdminFinder:
         """Determine if the site uses HTTP or HTTPS"""
         try:
             # Try HTTPS first
-            response = requests.get(
-                f"https://{self.domain}",
-                headers={'User-Agent': self.user_agent},
-                timeout=self.timeout,
-                verify=False  # Disable SSL verification for scanning purposes
-            )
+            response = self._make_request(f"https://{self.domain}")
             return f"https://{self.domain}"
         except Exception:
             try:
                 # Try HTTP if HTTPS fails
-                response = requests.get(
-                    f"http://{self.domain}",
-                    headers={'User-Agent': self.user_agent},
-                    timeout=self.timeout
-                )
+                response = self._make_request(f"http://{self.domain}")
                 return f"http://{self.domain}"
             except Exception as e:
                 self.logger.error(f"Error connecting to {self.domain}: {str(e)}")
@@ -213,7 +224,6 @@ class AdminFinder:
                         
                         progress.update(task, advance=1)
                         admin_queue.task_done()
-                        time.sleep(self.delay)  # Add delay between requests
                     except queue.Empty:
                         break
                     except Exception as e:
