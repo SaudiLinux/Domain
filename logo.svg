@@ -48,4 +48,7 @@
  <text x="400" y="350" font-family="Arial" font-size="16" fill="#2C3E50" text-anchor="middle">
   By SayerLinux
  </text>
+<a href="https://github.com/SaudiLinux/Domain" target="_blank">
+  <text x="50%" y="95%" text-anchor="middle" font-family="Arial" font-size="12">github.com/SaudiLinux/Domain</text>
+</a>
 </svg>

@@ -7,6 +7,8 @@ python-whois>=0.7.3
 colorama>=0.4.6
 tqdm>=4.64.1
 rich>=12.6.0
+selenium>=4.5.0
+webdriver-manager>=3.8.4
 
 # Network scanning
 scapy>=2.4.5
